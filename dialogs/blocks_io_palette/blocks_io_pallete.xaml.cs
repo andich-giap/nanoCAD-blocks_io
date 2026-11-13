@@ -1,11 +1,8 @@
-// dialogs/blocks_io_palette/blocks_io_pallete.xaml.cs
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
+using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
-using Microsoft.Win32;
+using System.Windows.Data;
 using Teigha.DatabaseServices;
 using HostMgd.ApplicationServices;
 using HostMgd.EditorInput;
@@ -17,13 +14,17 @@ namespace NanoCadIO
 	public partial class BlocksIoPalette : System.Windows.Controls.UserControl
 	{
 		public ObservableCollection<BlockSelectionItem> BlockItems { get; set; } = new();
-
+		
+		private readonly ICollectionView _blockItemsView;
 		private Document? _doc;
 
 		public BlocksIoPalette()
 		{
 			InitializeComponent();
-			BlocksList.ItemsSource = BlockItems;
+			
+			// Используем ICollectionView для фильтрации списка на лету
+			_blockItemsView = CollectionViewSource.GetDefaultView(BlockItems);
+			BlocksList.ItemsSource = _blockItemsView;
 
 			Loaded += BlocksIoPalette_Loaded;
 			Unloaded += BlocksIoPalette_Unloaded;
@@ -31,7 +32,6 @@ namespace NanoCadIO
 
 		private void BlocksIoPalette_Loaded(object sender, RoutedEventArgs e)
 		{
-			// на случай повторной загрузки — не подписываемся дважды
 			AcApp.DocumentManager.DocumentActivated -= DocumentManager_DocumentActivated;
 			AcApp.DocumentManager.DocumentActivated += DocumentManager_DocumentActivated;
 
@@ -46,7 +46,6 @@ namespace NanoCadIO
 			DetachFromDocument();
 		}
 
-		// Исправлено: object? sender (для соответствия EventHandler в .NET 6+)
 		private void DocumentManager_DocumentActivated(object? sender, DocumentCollectionEventArgs e)
 		{
 			AttachToDocument(e.Document);
@@ -74,14 +73,13 @@ namespace NanoCadIO
 			_doc = null;
 		}
 
-		// Исправлено: object? sender (это исправляет ошибку CS8622)
 		private void Doc_ImpliedSelectionChanged(object? sender, EventArgs e)
 		{
 			SyncSelectionFromDrawing();
 		}
 
 		/// <summary>
-		/// Отмечает в списке блоки, которые сейчас выделены в чертеже (pickfirst).
+		/// Фильтрует список блоков, оставляя только те, что есть в текущем выделении.
 		/// </summary>
 		private void SyncSelectionFromDrawing()
 		{
@@ -90,6 +88,7 @@ namespace NanoCadIO
 				return;
 
 			var selectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
 			try
 			{
 				var pickfirst = doc.Editor.SelectImplied();
@@ -98,10 +97,8 @@ namespace NanoCadIO
 					using var tr = doc.TransactionManager.StartTransaction();
 					foreach (SelectedObject selObj in pickfirst.Value)
 					{
-						if (selObj == null)
-							continue;
-						if (tr.GetObject(selObj.ObjectId, OpenMode.ForRead) is not BlockReference blockRef)
-							continue;
+						if (selObj == null) continue;
+						if (tr.GetObject(selObj.ObjectId, OpenMode.ForRead) is not BlockReference blockRef) continue;
 
 						string name = blockRef.Name;
 						if (blockRef.IsDynamicBlock)
@@ -119,8 +116,30 @@ namespace NanoCadIO
 				return;
 			}
 
-			foreach (var item in BlockItems)
-				item.IsSelected = selectedNames.Contains(item.BlockName);
+			// Настраиваем фильтр отображения списка
+			if (selectedNames.Count > 0)
+			{
+				_blockItemsView.Filter = obj =>
+				{
+					var item = obj as BlockSelectionItem;
+					return item != null && selectedNames.Contains(item.BlockName);
+				};
+
+				// Автоматически ставим галочки на тех блоках, которые сейчас выделены
+				foreach (var item in BlockItems)
+					item.IsSelected = selectedNames.Contains(item.BlockName);
+			}
+			else
+			{
+				// Если ничего не выделено в чертеже — показываем все блоки
+				_blockItemsView.Filter = null;
+				
+				// Снимаем галочки, чтобы избежать случайного экспорта
+				foreach (var item in BlockItems)
+					item.IsSelected = false;
+			}
+
+			_blockItemsView.Refresh();
 		}
 
 		private void RefreshBlockList()
@@ -138,12 +157,12 @@ namespace NanoCadIO
 				{
 					var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
 
-					// Пропускаем листы (Layouts) и системные/анонимные блоки (начинаются с * или _)
 					if (btr.IsLayout || btr.Name.StartsWith("*") || btr.Name.StartsWith("_"))
 						continue;
 
 					BlockItems.Add(new BlockSelectionItem { BlockName = btr.Name, IsSelected = false });
 				}
+				_blockItemsView.Refresh();
 				Log(doc, $"Загружено {BlockItems.Count} определений блоков.");
 			}
 			catch (Exception ex)
@@ -152,21 +171,24 @@ namespace NanoCadIO
 			}
 		}
 
-		private void RefreshBtn_Click(object sender, RoutedEventArgs e)
-		{
-			RefreshBlockList();
-			SyncSelectionFromDrawing();
-		}
-
 		private void ExportBtn_Click(object sender, RoutedEventArgs e)
 		{
 			var doc = AcApp.DocumentManager.MdiActiveDocument;
 			if (doc == null) return;
 
+			// Берем текущее выделение
+			var selection = doc.Editor.SelectImplied();
+			if (selection.Status != PromptStatus.OK || selection.Value == null || selection.Value.Count == 0)
+			{
+				Log(doc, "Нет выделенных объектов для экспорта. Выделите блоки в чертеже.");
+				return;
+			}
+
+			// Берем галочки из отфильтрованного списка
 			var selectedBlocks = BlockItems.Where(b => b.IsSelected).Select(b => b.BlockName).ToHashSet();
 			if (selectedBlocks.Count == 0)
 			{
-				Log(doc, "Не выбрано ни одного блока для экспорта.");
+				Log(doc, "Не выбрано ни одного типа блока для экспорта.");
 				return;
 			}
 
@@ -181,10 +203,11 @@ namespace NanoCadIO
 
 			try
 			{
-				var blocks = BlockDataExtractor.Extract(doc, selectedBlocks);
+				// Передаем только те ObjectId, которые сейчас выделены
+				var blocks = BlockDataExtractor.Extract(doc, selection.Value.GetObjectIds(), selectedBlocks);
 				if (blocks.Count == 0)
 				{
-					Log(doc, "Не найдено ни одного вхождения выбранных блоков в текущем чертеже.");
+					Log(doc, "Не найдено ни одного вхождения выбранных блоков в текущем выделении.");
 					return;
 				}
 
