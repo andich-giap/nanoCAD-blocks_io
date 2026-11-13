@@ -102,7 +102,7 @@ namespace NanoCadIO
 			return layoutNames;
 		}
 	}
-	public class BlockIO {
+	public class BlockInfo {
 		[CommandMethod("IO_GET_BLOCKS")]
 		public static void GetBlocks() {
 			Document document = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
@@ -181,31 +181,11 @@ namespace NanoCadIO
 	}
 	public class DialogCommands
 	{
-		private static BlocksIODialog.MainWindow _modelessWindow = null;
-		[CommandMethod("IO_SHOW_MODAL_DIALOG")]
-		public static void ShowModalDialog()
+		[CommandMethod("IO_SHOW_BLOCKS_IO_DIALOG")]
+		public static void ShowBlocksIoDialog()
 		{
-			BlocksIODialog.MainWindow win = new BlocksIODialog.MainWindow();
+			var win = new BlocksIoDialog();
 			HostMgd.ApplicationServices.Application.ShowModalWindow(win);
-		}
-		[CommandMethod("IO_SHOW_MODELESS_DIALOG")]
-		public static void ShowModelessDialog()
-		{
-			if (_modelessWindow != null && _modelessWindow.IsLoaded)
-			{
-				_modelessWindow.Activate();
-				return;
-			}
-	
-			_modelessWindow = new BlocksIODialog.MainWindow();
-			_modelessWindow.Closed += (sender, e) => 
-			{
-				_modelessWindow = null;
-			};
-			HostMgd.ApplicationServices.Application.ShowModelessWindow(
-				HostMgd.ApplicationServices.Application.MainWindow.Handle, 
-				_modelessWindow
-			);
 		}
 	}
 }
