@@ -1,7 +1,6 @@
 using ClosedXML.Excel;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Teigha.DatabaseServices;
 using HostMgd.ApplicationServices;
 
@@ -43,14 +42,31 @@ namespace NanoCadIO.BlockIO
 			int updatedCount = 0;
 
 			using var tr = db.TransactionManager.StartTransaction();
-			var space = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead);
+			
+			// Получаем таблицу блоков и ID пространства модели
+			var blockTable = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+			var modelSpaceId = blockTable[BlockTableRecord.ModelSpace];
 
-			// Строим индекс блоков по Handle для быстрого поиска
-			var blockRefByHandle = new Dictionary<string, BlockReference>();
-			foreach (var objId in space)
+			// Собираем ID всех пространств (Модель + Листы)
+			var spaceIds = new List<ObjectId> { modelSpaceId };
+			var layoutDict = (DBDictionary)tr.GetObject(db.LayoutDictionaryId, OpenMode.ForRead);
+			foreach (DBDictionaryEntry entry in layoutDict)
 			{
-				if (tr.GetObject(objId, OpenMode.ForRead) is BlockReference br)
-					blockRefByHandle[br.Handle.ToString()] = br;
+				var layout = (Layout)tr.GetObject(entry.Value, OpenMode.ForRead);
+				if (layout.BlockTableRecordId != modelSpaceId)
+					spaceIds.Add(layout.BlockTableRecordId);
+			}
+
+			// Строим индекс блоков по Handle для быстрого поиска во всем чертеже
+			var blockRefByHandle = new Dictionary<string, BlockReference>();
+			foreach (var spaceId in spaceIds)
+			{
+				var space = (BlockTableRecord)tr.GetObject(spaceId, OpenMode.ForRead);
+				foreach (var objId in space)
+				{
+					if (tr.GetObject(objId, OpenMode.ForRead) is BlockReference br)
+						blockRefByHandle[br.Handle.ToString()] = br;
+				}
 			}
 
 			foreach (var row in rows)
@@ -59,7 +75,7 @@ namespace NanoCadIO.BlockIO
 					continue;
 
 				if (!blockRefByHandle.TryGetValue(handleStr, out var blockRef))
-					continue; // Блок не найден в текущем пространстве
+					continue; // Блок не найден во всем чертеже
 
 				// Открываем блок для записи
 				blockRef.UpgradeOpen();

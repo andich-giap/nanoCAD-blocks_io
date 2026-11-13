@@ -8,7 +8,7 @@ namespace NanoCadIO.BlockIO
 	public static class BlockDataExtractor
 	{
 		/// <summary>
-		/// Собирает данные со всех блоков в текущем пространстве.
+		/// Собирает данные со всех блоков во всем чертеже (Модель + все Листы).
 		/// Если allowedBlockNames не пуст, собираются только блоки с указанными именами.
 		/// </summary>
 		public static List<BlockData> Extract(Document doc, HashSet<string>? allowedBlockNames = null)
@@ -17,60 +17,84 @@ namespace NanoCadIO.BlockIO
 			var db = doc.Database;
 
 			using var tr = db.TransactionManager.StartTransaction();
-			var spaceId = db.CurrentSpaceId;
-			var space = (BlockTableRecord)tr.GetObject(spaceId, OpenMode.ForRead);
+			
+			// Получаем таблицу блоков и ID пространства модели
+			var blockTable = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+			var modelSpaceId = blockTable[BlockTableRecord.ModelSpace];
 
-			foreach (var objId in space)
+			// Собираем ID всех пространств: Модель + все Листы
+			var spaceIds = new List<ObjectId> { modelSpaceId };
+			var layoutDict = (DBDictionary)tr.GetObject(db.LayoutDictionaryId, OpenMode.ForRead);
+			foreach (DBDictionaryEntry entry in layoutDict)
 			{
-				if (tr.GetObject(objId, OpenMode.ForRead) is not BlockReference blockRef)
-					continue;
+				var layout = (Layout)tr.GetObject(entry.Value, OpenMode.ForRead);
+				if (layout.BlockTableRecordId != modelSpaceId) // Исключаем дубликат модели
+					spaceIds.Add(layout.BlockTableRecordId);
+			}
 
-				// Фильтрация по выбранным именам
-				if (allowedBlockNames != null && allowedBlockNames.Count > 0)
+			foreach (var spaceId in spaceIds)
+			{
+				var space = (BlockTableRecord)tr.GetObject(spaceId, OpenMode.ForRead);
+				
+				foreach (var objId in space)
 				{
-					if (!allowedBlockNames.Contains(blockRef.Name))
+					if (tr.GetObject(objId, OpenMode.ForRead) is not BlockReference blockRef)
 						continue;
-				}
 
-				var data = new BlockData
-				{
-					Handle = blockRef.Handle.ToString(),
-					BlockName = blockRef.Name
-				};
-
-				// Атрибуты
-				foreach (ObjectId attId in blockRef.AttributeCollection)
-				{
-					if (tr.GetObject(attId, OpenMode.ForRead) is AttributeReference attRef)
+					// Получаем настоящее имя блока (даже если он динамический)
+					string realBlockName = blockRef.Name;
+					if (blockRef.IsDynamicBlock)
 					{
-						data.Attributes[attRef.Tag] = attRef.TextString;
+						var dynBtr = (BlockTableRecord)tr.GetObject(blockRef.DynamicBlockTableRecord, OpenMode.ForRead);
+						realBlockName = dynBtr.Name;
 					}
-				}
 
-				// Динамические свойства
-				if (blockRef.IsDynamicBlock)
-				{
-					var dynProps = blockRef.DynamicBlockReferencePropertyCollection;
-					foreach (DynamicBlockReferenceProperty prop in dynProps)
+					// Фильтрация по выбранным именам
+					if (allowedBlockNames != null && allowedBlockNames.Count > 0)
 					{
-						if (prop == null || !prop.Show || prop.ReadOnly)
+						if (!allowedBlockNames.Contains(realBlockName))
 							continue;
-
-						var val = prop.Value;
-						string value = val switch
-						{
-							object[] arr => string.Join(", ", arr),
-							null => string.Empty,
-							_ => val.ToString() ?? string.Empty
-						};
-						data.DynamicProperties[prop.PropertyName] = value;
 					}
-				}
 
-				result.Add(data);
+					var data = new BlockData
+					{
+						Handle = blockRef.Handle.ToString(),
+						BlockName = realBlockName // Записываем оригинальное имя
+					};
+
+					// Атрибуты
+					foreach (ObjectId attId in blockRef.AttributeCollection)
+					{
+						if (tr.GetObject(attId, OpenMode.ForRead) is AttributeReference attRef)
+						{
+							data.Attributes[attRef.Tag] = attRef.TextString;
+						}
+					}
+
+					// Динамические свойства
+					if (blockRef.IsDynamicBlock)
+					{
+						var dynProps = blockRef.DynamicBlockReferencePropertyCollection;
+						foreach (DynamicBlockReferenceProperty prop in dynProps)
+						{
+							if (prop == null || !prop.Show || prop.ReadOnly)
+								continue;
+
+							var val = prop.Value;
+							string value = val switch
+							{
+								object[] arr => string.Join(", ", arr),
+								null => string.Empty,
+								_ => val.ToString() ?? string.Empty
+							};
+							data.DynamicProperties[prop.PropertyName] = value;
+						}
+					}
+
+					result.Add(data);
+				}
 			}
 			
-			// tr.Commit() не нужен для read-only операций
 			return result;
 		}
 	}
