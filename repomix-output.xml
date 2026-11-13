@@ -1,0 +1,439 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+dialogs/
+  blocks_io_dialog/
+    blocks_io_dialog.xaml
+    blocks_io_dialog.xaml.cs
+  example_dialog.xaml
+  example_dialog.xaml.cs
+.gitignore
+NanoCadIO.cs
+NanoCadIO.csproj
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="dialogs/blocks_io_dialog/blocks_io_dialog.xaml">
+<Window x:Class="BlocksIODialog.MainWindow"
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+		xmlns:local="clr-namespace:BlocksIODialog"
+		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		mc:Ignorable="d"
+		Foreground="{DynamicResource Theme_TextBrush}">
+		
+	<Grid Background="{DynamicResource Theme_BackgroundBrush}">
+		<Grid Background="LightGray">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="*" />
+			</Grid.RowDefinitions>
+			<StackPanel Grid.Row="0" Height="32" Orientation="Horizontal" Background="LightGray" Visibility="Visible" IsEnabled="True" Margin="16,16,16,0">
+				<Button Content="Export" Click="ExportButton_Click" Width="100" Name="ExportButton" />
+				<Button Width="100" Height="32" Name="ImportButton" Content="Import" Click="ImportButton_Click" />
+			</StackPanel>
+			<ScrollViewer Grid.Row="1"
+				VerticalScrollBarVisibility="Auto" 
+				HorizontalScrollBarVisibility="Auto" 
+				CanContentScroll="True"
+				Margin="16,8,16,16">
+			</ScrollViewer>
+		</Grid>
+	</Grid>
+</Window>
+</file>
+
+<file path="dialogs/blocks_io_dialog/blocks_io_dialog.xaml.cs">
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using Teigha.DatabaseServices;
+using HostMgd.ApplicationServices;
+
+namespace BlocksIODialog;
+
+public partial class MainWindow : Window
+{
+	public MainWindow()
+	{
+		InitializeComponent();
+	}
+
+	private void ExportButton_Click(object sender, RoutedEventArgs e)
+	{
+		
+	}
+
+	private void ImportButton_Click(object sender, RoutedEventArgs e)
+	{
+		
+	}
+}
+</file>
+
+<file path="dialogs/example_dialog.xaml">
+<UserControl x:Class="ExampleDialog.PaletteWpfChild"
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 mc:Ignorable="d"
+			 d:DesignHeight="300" d:DesignWidth="300"
+			 Background="White"><Grid Width="300">
+	<StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Orientation="Horizontal" Width="300">
+		<Label Content="Количество объектов:"/>
+		<Label Name="NumEntsLabel" Content="0" MinWidth="50"/>
+	</StackPanel>
+<Button Name="UpdateBtn" Content="Обновить" HorizontalAlignment="Left" Height="22" Margin="14,45,0,0" Width="73" VerticalAlignment="Top" Click="UpdateBtn_Click"/>
+</Grid></UserControl>
+</file>
+
+<file path="dialogs/example_dialog.xaml.cs">
+using System.Windows;
+using Teigha.DatabaseServices;
+using HostMgd.ApplicationServices;
+
+
+namespace ExampleDialog
+{
+	public partial class PaletteWpfChild : System.Windows.Controls.UserControl
+	{
+		public PaletteWpfChild()
+		{
+			InitializeComponent();
+			this.Width = 300;
+		}
+		private void UpdateBtn_Click(object sender, RoutedEventArgs e)
+		{
+			NumEntsLabel.Content = CalculateObjects().ToString();
+		}
+		private int CalculateObjects()
+		{
+			Document doc = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+			Database db = doc.Database;
+
+			int curSpaceObjects = 0;
+
+			using (Transaction transaction = db.TransactionManager.StartTransaction())
+			{
+				if (transaction.GetObject(db.CurrentSpaceId, OpenMode.ForRead) is not BlockTableRecord blockTableRecord)
+					return 0;
+				
+				foreach (ObjectId obj in blockTableRecord)
+				{
+					curSpaceObjects++;
+				}
+			}
+			return curSpaceObjects;
+		}
+	}
+}
+</file>
+
+<file path=".gitignore">
+obj/
+bin/
+docs — ярлык.lnk
+</file>
+
+<file path="NanoCadIO.cs">
+using System;
+using System.Windows;
+using Teigha.Runtime;
+using Teigha.DatabaseServices;
+using HostMgd.ApplicationServices;
+using HostMgd.Windows;
+using HostMgd.EditorInput;
+
+
+namespace NanoCadIO
+{
+	public class LayoutCommands {
+		[CommandMethod("IO_SWITCH_TO_NEXT_LAYOUT")]
+		public static void SwitchToNextLayout() {
+			Document doc = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+			Editor ed = doc.Editor;
+			List<string> layout_names = GetLayoutNamesInTabOrder();
+			LayoutManager layoutManager = LayoutManager.Current;
+			string current_layout = layoutManager.CurrentLayout;
+			int current_layout_index = layout_names.FindIndex(x => x == current_layout);
+			int switch_to_index = (current_layout_index + 1 + layout_names.Count) % layout_names.Count;
+			ed.WriteMessage($"Switching to {switch_to_index}");
+			string next_layout = layout_names[switch_to_index];
+			layoutManager.CurrentLayout = next_layout;
+		}
+		[CommandMethod("IO_SWITCH_TO_PREVIOUS_LAYOUT")]
+		public static void SwitchToPreviousLayout() {
+			Document doc = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+			Editor ed = doc.Editor;
+			List<string> layout_names = GetLayoutNamesInTabOrder();
+			LayoutManager layoutManager = LayoutManager.Current;
+			string current_layout = layoutManager.CurrentLayout;
+			int current_layout_index = layout_names.FindIndex(x => x == current_layout);
+			int switch_to_index = (current_layout_index - 1 + layout_names.Count) % layout_names.Count;
+			ed.WriteMessage($"Switching to {switch_to_index}");
+			string previous_layout = layout_names[switch_to_index];
+			layoutManager.CurrentLayout = previous_layout;
+		}
+		public static void ListAllLayouts() {
+			Document doc = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+			Editor ed = doc.Editor;
+
+			DBDictionary layoutDictionart = GetLayoutDictionary();
+
+			// foreach
+			ed.WriteMessage($"\nЛисты: {String.Join(", ", GetLayoutNamesInTabOrder())}");
+		}
+		public static List<string> GetLayoutNames() {
+			List<string> layoutNames = new List<string>();
+			Database database = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Database;
+			DBDictionary layoutDictionary = GetLayoutDictionary();
+
+			using (Transaction transaction = database.TransactionManager.StartTransaction())
+			{
+				foreach (DBDictionaryEntry entry in layoutDictionary)
+				{
+					Layout layout = (Layout)transaction.GetObject(
+						entry.Value,
+						OpenMode.ForRead
+					);
+					layoutNames.Add(layout.LayoutName);
+				}
+			}
+
+			return layoutNames;
+		}
+		public static DBDictionary GetLayoutDictionary() {
+			List<string> layoutNames = new List<string>();
+			DBDictionary layoutDictionary;
+			Database database = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Database;
+
+			using (Transaction transaction = database.TransactionManager.StartTransaction())
+			{
+				layoutDictionary = (DBDictionary)transaction.GetObject(
+					database.LayoutDictionaryId,
+					OpenMode.ForRead
+				);
+			}
+			return layoutDictionary;
+		}
+		public static List<string> GetLayoutNamesInTabOrder() {
+			var layoutNames = new List<string>();
+			Database db = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Database;
+			
+			using (Transaction tr = db.TransactionManager.StartTransaction())
+			{
+				var layoutDict = (DBDictionary)tr.GetObject(
+					db.LayoutDictionaryId,
+					OpenMode.ForRead
+				);
+				var layoutsByTab = new SortedDictionary<int, string>();
+
+				foreach (DBDictionaryEntry entry in layoutDict)
+				{
+					var layout = (Layout)tr.GetObject(entry.Value, OpenMode.ForRead);
+					layoutsByTab[layout.TabOrder] = layout.LayoutName;
+				}
+
+				layoutNames.AddRange(layoutsByTab.Values);
+			}
+
+			return layoutNames;
+		}
+	}
+	public class BlockIO {
+		[CommandMethod("IO_GET_BLOCKS")]
+		public static void GetBlocks() {
+			Document document = HostMgd.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+			Editor editor = document.Editor;
+			Database database = document.Database;
+			using (Transaction transaction = document.TransactionManager.StartTransaction()) {
+				var blockTable = (BlockTable)transaction.GetObject(database.BlockTableId, OpenMode.ForRead);
+				foreach (ObjectId btrObj in blockTable) {
+					if (transaction.GetObject(btrObj, OpenMode.ForRead) is not BlockTableRecord blockTableRecord)
+					{
+						continue;
+					}
+					if (blockTableRecord.IsLayout | blockTableRecord.Name.StartsWith("_"))
+					{
+						continue;
+					}
+					editor.WriteMessage($"Имя блока: {blockTableRecord.Name}\tДинамический: {blockTableRecord.IsDynamicBlock}");
+					ObjectIdCollection blockReferenceIds = blockTableRecord.GetBlockReferenceIds(true, true);
+					foreach (ObjectId brObj in blockReferenceIds)
+					{
+						if (transaction.GetObject(brObj, OpenMode.ForRead) is not BlockReference blockReference)
+						{
+							continue;
+						}
+
+						editor.WriteMessage($"\n\tЭкземпляр блока {blockReference.Name}:");
+
+						if (blockReference.IsDynamicBlock)
+						{
+							editor.WriteMessage("\n\t\t--- Динамические свойства ---");
+							DynamicBlockReferencePropertyCollection dynamicProperties = blockReference.DynamicBlockReferencePropertyCollection;
+							string value;
+							foreach (DynamicBlockReferenceProperty dynamicProperty in dynamicProperties)
+							{
+								if (dynamicProperty == null) continue;
+								if (dynamicProperty.Show == false) continue;
+								if (dynamicProperty.Value is object[] arrayValue)
+									value = string.Join(", ", arrayValue);
+								else
+									value = dynamicProperty.Value?.ToString() ?? "<null>";
+								editor.WriteMessage($"\n\t\t{dynamicProperty.PropertyName}: {value}");
+							}
+						}
+						
+						if (blockReference.AttributeCollection.Count > 0)
+							editor.WriteMessage("\n\t\t--- Атрибуты ---");
+						foreach (ObjectId attrObj in blockReference.AttributeCollection)
+						{
+							if (transaction.GetObject(attrObj, OpenMode.ForRead) is not AttributeReference attributeReference)
+								continue;
+							if (attributeReference.Invisible)
+								continue;
+							editor.WriteMessage($"\n\t\t{attributeReference.Tag}: {attributeReference.TextString}");
+						}
+					}
+				}
+			}
+		}
+	}
+	public class PaletteCommands {
+		private static PaletteSet? _paletteSet;
+
+		[CommandMethod("IO_SHOW_PALETTE")]
+		public static void ShowPalette()
+		{
+			if (_paletteSet == null)
+			{
+				_paletteSet = new PaletteSet("Моя палитра");
+				var myControl = new ExampleDialog.PaletteWpfChild();
+				_paletteSet.AddVisual("Инструменты", myControl);
+				_paletteSet.MinimumSize = new System.Drawing.Size(300, 300);
+				_paletteSet.Dock = DockSides.None;
+			}
+			_paletteSet.Visible = true;
+		}
+	}
+	public class DialogCommands
+	{
+		private static BlocksIODialog.MainWindow _modelessWindow = null;
+		[CommandMethod("IO_SHOW_MODAL_DIALOG")]
+		public static void ShowModalDialog()
+		{
+			BlocksIODialog.MainWindow win = new BlocksIODialog.MainWindow();
+			HostMgd.ApplicationServices.Application.ShowModalWindow(win);
+		}
+		[CommandMethod("IO_SHOW_MODELESS_DIALOG")]
+		public static void ShowModelessDialog()
+		{
+			if (_modelessWindow != null && _modelessWindow.IsLoaded)
+			{
+				_modelessWindow.Activate();
+				return;
+			}
+	
+			_modelessWindow = new BlocksIODialog.MainWindow();
+			_modelessWindow.Closed += (sender, e) => 
+			{
+				_modelessWindow = null;
+			};
+			HostMgd.ApplicationServices.Application.ShowModelessWindow(
+				HostMgd.ApplicationServices.Application.MainWindow.Handle, 
+				_modelessWindow
+			);
+		}
+	}
+}
+</file>
+
+<file path="NanoCadIO.csproj">
+<Project Sdk="Microsoft.NET.Sdk">
+
+<PropertyGroup>
+	<UseWPF>true</UseWPF>
+	<TargetFramework>net6.0-windows</TargetFramework>
+	<PlatformTarget>x64</PlatformTarget>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<Nullable>enable</Nullable>
+</PropertyGroup>
+
+<ItemGroup>
+	<Reference Include="hostmgd">
+		<HintPath>D:\Почта_Андич\Документы\Programs\NanoCadSdkRu\include-x64\hostmgd.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="hostdbmgd">
+		<HintPath>D:\Почта_Андич\Документы\Programs\NanoCadSdkRu\include-x64\hostdbmgd.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="System.Drawing">
+		<HintPath>C:\Users\kip_78\AppData\Local\dotnet8\dotnet\shared\Microsoft.WindowsDesktop.App\6.0.36\System.Drawing.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="WindowsBase">
+		<HintPath>C:\Users\kip_78\AppData\Local\dotnet8\dotnet\shared\Microsoft.WindowsDesktop.App\6.0.36\WindowsBase.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="Microsoft.VisualBasic">
+		<HintPath>C:\Users\kip_78\AppData\Local\dotnet8\dotnet\shared\Microsoft.WindowsDesktop.App\6.0.36\Microsoft.VisualBasic.dll</HintPath>
+		<Private>False</Private>
+	</Reference>
+	<Reference Include="PresentationFramework">
+	<HintPath>C:\Users\kip_78\AppData\Local\dotnet8\dotnet\shared\Microsoft.WindowsDesktop.App\6.0.36\PresentationFramework.dll</HintPath>
+	<Private>False</Private>
+</Reference>
+</ItemGroup>
+
+</Project>
+</file>
+
+</files>
