@@ -1,3 +1,4 @@
+// excel_importer.cs
 using ClosedXML.Excel;
 using System;
 using System.Collections.Generic;
@@ -10,6 +11,9 @@ namespace NanoCadIO.BlockIO
 	{
 		/// <summary>
 		/// Обновляет блоки в чертеже данными из Excel.
+		/// Изменения вносятся под блокировкой документа в рамках одной транзакции
+		/// Document.TransactionManager, поэтому Commit попадает в undo-стек
+		/// редактора (UNDO / REDO работают как для обычной команды).
 		/// Возвращает количество успешно обновлённых блоков.
 		/// </summary>
 		public static int Import(Document doc, string filePath)
@@ -41,89 +45,96 @@ namespace NanoCadIO.BlockIO
 			var db = doc.Database;
 			int updatedCount = 0;
 
-			using var tr = db.TransactionManager.StartTransaction();
-			
-			// Получаем таблицу блоков и ID пространства модели
-			var blockTable = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-			var modelSpaceId = blockTable[BlockTableRecord.ModelSpace];
-
-			// Собираем ID всех пространств (Модель + Листы)
-			var spaceIds = new List<ObjectId> { modelSpaceId };
-			var layoutDict = (DBDictionary)tr.GetObject(db.LayoutDictionaryId, OpenMode.ForRead);
-			foreach (DBDictionaryEntry entry in layoutDict)
+			// Блокировка документа обязательна при вызове из немодальной панели,
+			// иначе UpgradeOpen бросит eLockViolation и изменения не применятся.
+			// Транзакция стартует через Document.TransactionManager — её Commit
+			// автоматически добавляется в undo-стек документа.
+			using (doc.LockDocument())
+			using (var tr = doc.TransactionManager.StartTransaction())
 			{
-				var layout = (Layout)tr.GetObject(entry.Value, OpenMode.ForRead);
-				if (layout.BlockTableRecordId != modelSpaceId)
-					spaceIds.Add(layout.BlockTableRecordId);
-			}
+				// Получаем таблицу блоков и ID пространства модели
+				var blockTable = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+				var modelSpaceId = blockTable[BlockTableRecord.ModelSpace];
 
-			// Строим индекс блоков по Handle для быстрого поиска во всем чертеже
-			var blockRefByHandle = new Dictionary<string, BlockReference>();
-			foreach (var spaceId in spaceIds)
-			{
-				var space = (BlockTableRecord)tr.GetObject(spaceId, OpenMode.ForRead);
-				foreach (var objId in space)
+				// Собираем ID всех пространств (Модель + Листы)
+				var spaceIds = new List<ObjectId> { modelSpaceId };
+				var layoutDict = (DBDictionary)tr.GetObject(db.LayoutDictionaryId, OpenMode.ForRead);
+				foreach (DBDictionaryEntry entry in layoutDict)
 				{
-					if (tr.GetObject(objId, OpenMode.ForRead) is BlockReference br)
-						blockRefByHandle[br.Handle.ToString()] = br;
+					var layout = (Layout)tr.GetObject(entry.Value, OpenMode.ForRead);
+					if (layout.BlockTableRecordId != modelSpaceId)
+						spaceIds.Add(layout.BlockTableRecordId);
 				}
-			}
 
-			foreach (var row in rows)
-			{
-				if (!row.TryGetValue("Handle", out var handleStr))
-					continue;
-
-				if (!blockRefByHandle.TryGetValue(handleStr, out var blockRef))
-					continue; // Блок не найден во всем чертеже
-
-				// Открываем блок для записи
-				blockRef.UpgradeOpen();
-
-				// Обновляем атрибуты
-				foreach (ObjectId attId in blockRef.AttributeCollection)
+				// Строим индекс блоков по Handle для быстрого поиска во всем чертеже
+				var blockRefByHandle = new Dictionary<string, BlockReference>();
+				foreach (var spaceId in spaceIds)
 				{
-					if (tr.GetObject(attId, OpenMode.ForWrite) is not AttributeReference attRef)
+					var space = (BlockTableRecord)tr.GetObject(spaceId, OpenMode.ForRead);
+					foreach (var objId in space)
+					{
+						if (tr.GetObject(objId, OpenMode.ForRead) is BlockReference br)
+							blockRefByHandle[br.Handle.ToString()] = br;
+					}
+				}
+
+				foreach (var row in rows)
+				{
+					if (!row.TryGetValue("Handle", out var handleStr))
 						continue;
 
-					var headerKey = $"Attr_{attRef.Tag}";
-					if (row.TryGetValue(headerKey, out var newValue))
-					{
-						attRef.TextString = newValue;
-					}
-				}
+					if (!blockRefByHandle.TryGetValue(handleStr, out var blockRef))
+						continue; // Блок не найден во всем чертеже
 
-				// Обновляем динамические свойства
-				if (blockRef.IsDynamicBlock)
-				{
-					var dynProps = blockRef.DynamicBlockReferencePropertyCollection;
-					foreach (DynamicBlockReferenceProperty prop in dynProps)
+					// Открываем блок для записи
+					blockRef.UpgradeOpen();
+
+					// Обновляем атрибуты
+					foreach (ObjectId attId in blockRef.AttributeCollection)
 					{
-						if (prop == null || !prop.Show || prop.ReadOnly)
+						if (tr.GetObject(attId, OpenMode.ForWrite) is not AttributeReference attRef)
 							continue;
 
-						var headerKey = $"Dyn_{prop.PropertyName}";
-						if (!row.TryGetValue(headerKey, out var newValue))
-							continue;
-
-						try
+						var headerKey = $"Attr_{attRef.Tag}";
+						if (row.TryGetValue(headerKey, out var newValue))
 						{
-							// Приводим строку к типу, который ожидает свойство
-							object valueToSet = ConvertValueForProperty(prop, newValue);
-							prop.Value = valueToSet;
-						}
-						catch (Exception ex)
-						{
-							// Можно логировать ошибку, но не прерывать весь импорт
-							doc.Editor.WriteMessage($"\nНе удалось установить свойство {prop.PropertyName} для блока {handleStr}: {ex.Message}");
+							attRef.TextString = newValue;
 						}
 					}
+
+					// Обновляем динамические свойства
+					if (blockRef.IsDynamicBlock)
+					{
+						var dynProps = blockRef.DynamicBlockReferencePropertyCollection;
+						foreach (DynamicBlockReferenceProperty prop in dynProps)
+						{
+							if (prop == null || !prop.Show || prop.ReadOnly)
+								continue;
+
+							var headerKey = $"Dyn_{prop.PropertyName}";
+							if (!row.TryGetValue(headerKey, out var newValue))
+								continue;
+
+							try
+							{
+								// Приводим строку к типу, который ожидает свойство
+								object valueToSet = ConvertValueForProperty(prop, newValue);
+								prop.Value = valueToSet;
+							}
+							catch (Exception ex)
+							{
+								// Можно логировать ошибку, но не прерывать весь импорт
+								doc.Editor.WriteMessage($"\nНе удалось установить свойство {prop.PropertyName} для блока {handleStr}: {ex.Message}");
+							}
+						}
+					}
+
+					updatedCount++;
 				}
 
-				updatedCount++;
+				tr.Commit();
 			}
 
-			tr.Commit();
 			return updatedCount;
 		}
 
