@@ -164,28 +164,21 @@ namespace NanoCadIO
 	}
 	public class PaletteCommands {
 		private static PaletteSet? _paletteSet;
-
-		[CommandMethod("IO_SHOW_PALETTE")]
-		public static void ShowPalette()
+		[CommandMethod("IO_SHOW_BLOCKS_IO_PALETTE")]
+		public static void ShowBlocksIOPalette()
 		{
 			if (_paletteSet == null)
 			{
-				_paletteSet = new PaletteSet("Моя палитра");
-				var myControl = new ExampleDialog.PaletteWpfChild();
-				_paletteSet.AddVisual("Инструменты", myControl);
-				_paletteSet.MinimumSize = new System.Drawing.Size(300, 300);
+				_paletteSet = new PaletteSet("Блоки в Excel");
+				var ioControl = new BlocksIoPalette();
+				
+				// Добавляем наш UserControl на панель
+				_paletteSet.AddVisual("Экспорт/Импорт", ioControl);
+				
+				_paletteSet.MinimumSize = new System.Drawing.Size(350, 500);
 				_paletteSet.Dock = DockSides.None;
 			}
 			_paletteSet.Visible = true;
-		}
-	}
-	public class DialogCommands
-	{
-		[CommandMethod("IO_SHOW_BLOCKS_IO_DIALOG")]
-		public static void ShowBlocksIoDialog()
-		{
-			var win = new BlocksIoDialog();
-			HostMgd.ApplicationServices.Application.ShowModalWindow(win);
 		}
 	}
 }
