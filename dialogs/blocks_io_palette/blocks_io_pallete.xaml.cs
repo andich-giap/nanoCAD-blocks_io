@@ -49,6 +49,8 @@ namespace NanoCadIO
 			AttachToDocument(AcApp.DocumentManager.MdiActiveDocument);
 			RefreshBlockList();
 			SyncSelectionFromDrawing();
+
+			this.UpdateLayout(); 
 		}
 
 		private void BlocksIoPalette_Unloaded(object sender, RoutedEventArgs e)

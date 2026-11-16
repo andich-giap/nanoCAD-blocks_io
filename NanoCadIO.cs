@@ -5,7 +5,8 @@ using Teigha.DatabaseServices;
 using HostMgd.ApplicationServices;
 using HostMgd.Windows;
 using HostMgd.EditorInput;
-
+using System.Windows.Forms.Integration;
+using System.Windows.Forms;
 
 namespace NanoCadIO
 {
@@ -42,7 +43,6 @@ namespace NanoCadIO
 
 			DBDictionary layoutDictionart = GetLayoutDictionary();
 
-			// foreach
 			ed.WriteMessage($"\nЛисты: {String.Join(", ", GetLayoutNamesInTabOrder())}");
 		}
 		public static List<string> GetLayoutNames() {
@@ -164,17 +164,26 @@ namespace NanoCadIO
 	}
 	public class PaletteCommands {
 		private static PaletteSet? _paletteSet;
+
 		[CommandMethod("IO_SHOW_BLOCKS_IO_PALETTE")]
 		public static void ShowBlocksIOPalette()
 		{
 			if (_paletteSet == null)
 			{
 				_paletteSet = new PaletteSet("Блоки в Excel");
+				
 				var ioControl = new BlocksIoPalette();
+
+				var elementHost = new ElementHost
+				{
+					Dock = System.Windows.Forms.DockStyle.Fill,
+					Child = ioControl
+				};
+
+				// Используем .Add вместо .AddVisual, так как elementHost - это WinForms контрол
+				_paletteSet.Add("Экспорт/Импорт", elementHost);
 				
-				// Добавляем наш UserControl на панель
-				_paletteSet.AddVisual("Экспорт/Импорт", ioControl);
-				
+				_paletteSet.Size = new System.Drawing.Size(350, 500);
 				_paletteSet.MinimumSize = new System.Drawing.Size(350, 500);
 				_paletteSet.Dock = DockSides.None;
 			}
