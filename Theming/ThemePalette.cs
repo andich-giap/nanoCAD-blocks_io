@@ -21,20 +21,19 @@ namespace NanoCadIo.Theming
         public Color ButtonHover { get; init; }
         public Color ButtonPressed { get; init; }
 
-        // Подобрано по скриншоту нативной панели nanoCAD 24 (тёмная тема)
         public static readonly ThemePalette Dark = new()
         {
-            WindowBackground   = Color.FromRgb(0x3C, 0x3C, 0x3C), // как у «Свойства»
-            ControlBackground  = Color.FromRgb(0x42, 0x42, 0x42), // поля/чекбоксы чуть светлее
-            Foreground         = Color.FromRgb(0xD5, 0xD5, 0xD5), // мягкий белый
-            Border             = Color.FromRgb(0x4A, 0x4A, 0x4A), // тонкие рамки
-            Accent             = Color.FromRgb(0x00, 0x78, 0xD4), // Win11 синий
+            WindowBackground   = Color.FromRgb(0x5C, 0x5C, 0x5C),
+            ControlBackground  = Color.FromRgb(0x5C, 0x5C, 0x5C),
+            Foreground         = Color.FromRgb(0xD5, 0xD5, 0xD5),
+            Border             = Color.FromRgb(0x4A, 0x4A, 0x4A),
+            Accent             = Color.FromRgb(0x00, 0x78, 0xD4),
             GrayText           = Color.FromRgb(0x99, 0x99, 0x99),
             Error              = Color.FromRgb(0xFF, 0x6B, 0x6B),
-            ListBackground     = Color.FromRgb(0x3C, 0x3C, 0x3C), // = фон панели!
-            ListItemHover      = Color.FromRgb(0x46, 0x46, 0x46), // едва заметный hover
-            ListItemSelected   = Color.FromRgb(0x2D, 0x5B, 0x8B), // как в «Выбор»
-            ButtonBackground   = Color.FromRgb(0x42, 0x42, 0x42), // «Применить»
+            ListBackground     = Color.FromRgb(0x5C, 0x5C, 0x5C),
+            ListItemHover      = Color.FromRgb(0x46, 0x46, 0x46),
+            ListItemSelected   = Color.FromRgb(0x2D, 0x5B, 0x8B),
+            ButtonBackground   = Color.FromRgb(0x42, 0x42, 0x42),
             ButtonHover        = Color.FromRgb(0x4D, 0x4D, 0x4D),
             ButtonPressed      = Color.FromRgb(0x55, 0x55, 0x55)
         };

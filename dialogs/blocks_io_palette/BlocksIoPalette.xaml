@@ -65,20 +65,22 @@
         <Style TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource Theme.Foreground}"/>
+            <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Bd"
-                                Background="{TemplateBinding Background}"
-                                Padding="4,3">
+                        <!-- Padding убран — отступы задаёт сам CheckBox -->
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Theme.ListItemHover}"/>
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource Theme.ListItemHover}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Theme.ListItemSelected}"/>
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource Theme.ListItemSelected}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -182,8 +184,11 @@
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                              Margin="4,2"
-                              VerticalContentAlignment="Center">
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Left"
+                              VerticalContentAlignment="Center"
+                              Padding="6,3">
                         <CheckBox.Style>
                             <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
                                 <Style.Triggers>
