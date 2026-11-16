@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace NanoCadIO.BlockIO
+namespace NanoCadIo.BlockIO
 {
     // 1. Класс для хранения данных блока при экспорте/импорте
     public class BlockData

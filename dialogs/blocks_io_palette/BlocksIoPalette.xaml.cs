@@ -11,10 +11,11 @@ using System.Windows.Media;
 using Teigha.DatabaseServices;
 using HostMgd.ApplicationServices;
 using HostMgd.EditorInput;
-using NanoCadIO.BlockIO;
+using NanoCadIo.BlockIO;
+using NanoCadIo.Theming;
 using AcApp = HostMgd.ApplicationServices.Application;
 
-namespace NanoCadIO
+namespace NanoCadIo
 {
 	public partial class BlocksIoPalette : System.Windows.Controls.UserControl
 	{
@@ -43,6 +44,10 @@ namespace NanoCadIO
 
 		private void BlocksIoPalette_Loaded(object sender, RoutedEventArgs e)
 		{
+			NanoCadThemeService.Instance.Refresh(this);
+			NanoCadThemeService.Instance.ThemeChanged -= OnThemeChanged;
+			NanoCadThemeService.Instance.ThemeChanged += OnThemeChanged;
+
 			AcApp.DocumentManager.DocumentActivated -= DocumentManager_DocumentActivated;
 			AcApp.DocumentManager.DocumentActivated += DocumentManager_DocumentActivated;
 
@@ -50,13 +55,20 @@ namespace NanoCadIO
 			RefreshBlockList();
 			SyncSelectionFromDrawing();
 
-			this.UpdateLayout(); 
+			this.UpdateLayout();
 		}
 
 		private void BlocksIoPalette_Unloaded(object sender, RoutedEventArgs e)
 		{
+			NanoCadThemeService.Instance.ThemeChanged -= OnThemeChanged;
 			AcApp.DocumentManager.DocumentActivated -= DocumentManager_DocumentActivated;
 			DetachFromDocument();
+		}
+
+		private void OnThemeChanged(object? sender, NanoCadTheme e)
+		{
+			// Форсируем переоценку DynamicResource после смены словаря.
+			StatusLabel.ClearValue(TextBlock.ForegroundProperty);
 		}
 
 		private void DocumentManager_DocumentActivated(object? sender, DocumentCollectionEventArgs e)
@@ -272,6 +284,7 @@ namespace NanoCadIO
 
 		private void RefreshBtn_Click(object sender, RoutedEventArgs e)
 		{
+			NanoCadThemeService.Instance.Refresh(this);
 			RefreshBlockList();
 			SyncSelectionFromDrawing();
 			SetStatus("Список блоков обновлён.", isError: false);
@@ -427,10 +440,8 @@ namespace NanoCadIO
 		private void SetStatus(string message, bool isError)
 		{
 			StatusLabel.Text = message;
-			if (isError)
-				StatusLabel.Foreground = System.Windows.Media.Brushes.Firebrick; // Явно указываем WPF Brushes
-			else
-				StatusLabel.ClearValue(TextBlock.ForegroundProperty);
+			StatusLabel.SetResourceReference(TextBlock.ForegroundProperty,
+				isError ? "Theme.Error" : "Theme.Foreground");
 
 			// Дублируем ошибки в командную строку как вторичный канал.
 			if (isError)

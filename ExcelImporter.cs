@@ -7,7 +7,7 @@ using System.Linq;
 using Teigha.DatabaseServices;
 using HostMgd.ApplicationServices;
 
-namespace NanoCadIO.BlockIO
+namespace NanoCadIo.BlockIO
 {
 	public static class ExcelImporter
 	{

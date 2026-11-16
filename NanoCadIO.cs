@@ -8,7 +8,7 @@ using HostMgd.EditorInput;
 using System.Windows.Forms.Integration;
 using System.Windows.Forms;
 
-namespace NanoCadIO
+namespace NanoCadIo
 {
 	public class LayoutCommands {
 		[CommandMethod("IO_SWITCH_TO_NEXT_LAYOUT")]

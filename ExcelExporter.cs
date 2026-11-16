@@ -2,7 +2,7 @@ using ClosedXML.Excel;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace NanoCadIO.BlockIO
+namespace NanoCadIo.BlockIO
 {
 	public static class ExcelExporter
 	{
