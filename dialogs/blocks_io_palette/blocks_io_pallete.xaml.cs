@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Media;
 using Teigha.DatabaseServices;
 using HostMgd.ApplicationServices;
 using HostMgd.EditorInput;
@@ -14,16 +19,22 @@ namespace NanoCadIO
 	public partial class BlocksIoPalette : System.Windows.Controls.UserControl
 	{
 		public ObservableCollection<BlockSelectionItem> BlockItems { get; set; } = new();
-		
+
 		private readonly ICollectionView _blockItemsView;
 		private Document? _doc;
+
+		// Кэш последнего состояния выделения — чтобы не перечитывать чертёж
+		// при каждом клике по чекбоксу.
+		private int _lastSelectedBlockCount;
+		private int _lastSelectedTypeCount;
 
 		public BlocksIoPalette()
 		{
 			InitializeComponent();
-			
-			// Используем ICollectionView для фильтрации списка на лету
+
 			_blockItemsView = CollectionViewSource.GetDefaultView(BlockItems);
+			_blockItemsView.SortDescriptions.Add(
+				new SortDescription(nameof(BlockSelectionItem.BlockName), ListSortDirection.Ascending));
 			BlocksList.ItemsSource = _blockItemsView;
 
 			Loaded += BlocksIoPalette_Loaded;
@@ -79,15 +90,16 @@ namespace NanoCadIO
 		}
 
 		/// <summary>
-		/// Фильтрует список блоков, оставляя только те, что есть в текущем выделении.
+		/// Обновляет отметки «в выделении» и счётчики. НЕ трогает пользовательские галочки
+		/// и не навязывает фильтр списка — список всегда показывает все определения блоков.
 		/// </summary>
 		private void SyncSelectionFromDrawing()
 		{
 			var doc = AcApp.DocumentManager.MdiActiveDocument;
-			if (doc == null || BlockItems.Count == 0)
-				return;
+			if (doc == null) return;
 
-			var selectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			int selectedBlockCount = 0;
+			var selectedTypeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 			try
 			{
@@ -100,53 +112,61 @@ namespace NanoCadIO
 						if (selObj == null) continue;
 						if (tr.GetObject(selObj.ObjectId, OpenMode.ForRead) is not BlockReference blockRef) continue;
 
-						string name = blockRef.Name;
-						if (blockRef.IsDynamicBlock)
-						{
-							var dynBtr = (BlockTableRecord)tr.GetObject(blockRef.DynamicBlockTableRecord, OpenMode.ForRead);
-							name = dynBtr.Name;
-						}
-						selectedNames.Add(name);
+						selectedTypeNames.Add(GetRealBlockName(blockRef, tr));
+						selectedBlockCount++;
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				Log(doc, $"Не удалось прочитать текущее выделение: {ex.Message}");
+				SetStatus($"Не удалось прочитать текущее выделение: {ex.Message}", isError: true);
 				return;
 			}
 
-			// Настраиваем фильтр отображения списка
-			if (selectedNames.Count > 0)
-			{
-				_blockItemsView.Filter = obj =>
-				{
-					var item = obj as BlockSelectionItem;
-					return item != null && selectedNames.Contains(item.BlockName);
-				};
+			foreach (var item in BlockItems)
+				item.IsInSelection = selectedTypeNames.Contains(item.BlockName);
 
-				// Автоматически ставим галочки на тех блоках, которые сейчас выделены
-				foreach (var item in BlockItems)
-					item.IsSelected = selectedNames.Contains(item.BlockName);
-			}
-			else
-			{
-				// Если ничего не выделено в чертеже — показываем все блоки
-				_blockItemsView.Filter = null;
-				
-				// Снимаем галочки, чтобы избежать случайного экспорта
-				foreach (var item in BlockItems)
-					item.IsSelected = false;
-			}
+			_lastSelectedBlockCount = selectedBlockCount;
+			_lastSelectedTypeCount = selectedTypeNames.Count;
 
 			_blockItemsView.Refresh();
+			UpdateCountsStatus();
+		}
+
+		private static string GetRealBlockName(BlockReference blockRef, Transaction tr)
+		{
+			if (!blockRef.IsDynamicBlock)
+				return blockRef.Name;
+
+			var dynBtr = (BlockTableRecord)tr.GetObject(blockRef.DynamicBlockTableRecord, OpenMode.ForRead);
+			return dynBtr.Name;
+		}
+
+		private void UpdateCountsStatus()
+		{
+			int checkedCount = BlockItems.Count(b => b.IsSelected);
+			int exportableTypes = BlockItems.Count(b => b.IsSelected && b.IsInSelection);
+
+			string text = _lastSelectedBlockCount == 0
+				? $"В выделении: 0 блоков. Отмечено типов: {checkedCount}. Выделите блоки в чертеже для экспорта."
+				: $"В выделении: {_lastSelectedBlockCount} блоков / {_lastSelectedTypeCount} типов. " +
+				  $"Отмечено типов: {checkedCount}, к экспорту: {exportableTypes}.";
+
+			CountsLabel.Text = text;
 		}
 
 		private void RefreshBlockList()
 		{
-			BlockItems.Clear();
 			var doc = AcApp.DocumentManager.MdiActiveDocument;
 			if (doc == null) return;
+
+			// Сохраняем отметки пользователя по имени между обновлениями.
+			var previouslyChecked = BlockItems
+				.Where(b => b.IsSelected)
+				.Select(b => b.BlockName)
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+			BlockItems.Clear();
 
 			try
 			{
@@ -160,15 +180,90 @@ namespace NanoCadIO
 					if (btr.IsLayout || btr.Name.StartsWith("*") || btr.Name.StartsWith("_"))
 						continue;
 
-					BlockItems.Add(new BlockSelectionItem { BlockName = btr.Name, IsSelected = false });
+					var item = new BlockSelectionItem
+					{
+						BlockName = btr.Name,
+						IsSelected = previouslyChecked.Contains(btr.Name),
+						InstanceCount = CountInstances(btr),
+						IsDynamic = SafeIsDynamic(btr),
+						HasAttributes = SafeHasAttributes(btr)
+					};
+					item.PropertyChanged += Item_PropertyChanged;
+					BlockItems.Add(item);
 				}
+
 				_blockItemsView.Refresh();
-				Log(doc, $"Загружено {BlockItems.Count} определений блоков.");
 			}
 			catch (Exception ex)
 			{
-				Log(doc, $"Ошибка загрузки списка: {ex.Message}");
+				SetStatus($"Ошибка загрузки списка: {ex.Message}", isError: true);
 			}
+		}
+
+		private static int CountInstances(BlockTableRecord btr)
+		{
+			try
+			{
+				var ids = btr.GetBlockReferenceIds(true, true);
+				return ids?.Count ?? 0;
+			}
+			catch
+			{
+				return 0;
+			}
+		}
+
+		private static bool SafeIsDynamic(BlockTableRecord btr)
+		{
+			try { return btr.IsDynamicBlock; }
+			catch { return false; }
+		}
+
+		private static bool SafeHasAttributes(BlockTableRecord btr)
+		{
+			try { return btr.HasAttributeDefinitions; }
+			catch { return false; }
+		}
+
+		private void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+		{
+			if (e.PropertyName == nameof(BlockSelectionItem.IsSelected))
+				UpdateCountsStatus();
+		}
+
+		private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+		{
+			var text = SearchBox.Text?.Trim() ?? string.Empty;
+			if (string.IsNullOrEmpty(text))
+			{
+				_blockItemsView.Filter = null;
+			}
+			else
+			{
+				_blockItemsView.Filter = obj =>
+					obj is BlockSelectionItem item &&
+					item.BlockName.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
+			}
+			_blockItemsView.Refresh();
+		}
+
+		private void SelectAllBtn_Click(object sender, RoutedEventArgs e)
+		{
+			foreach (var item in _blockItemsView.Cast<BlockSelectionItem>())
+				item.IsSelected = true;
+		}
+
+		private void ClearAllBtn_Click(object sender, RoutedEventArgs e)
+		{
+			foreach (var item in _blockItemsView.Cast<BlockSelectionItem>())
+				item.IsSelected = false;
+		}
+
+		private void RefreshBtn_Click(object sender, RoutedEventArgs e)
+		{
+			RefreshBlockList();
+			SyncSelectionFromDrawing();
+			SetStatus("Список блоков обновлён.", isError: false);
 		}
 
 		private void ExportBtn_Click(object sender, RoutedEventArgs e)
@@ -176,19 +271,39 @@ namespace NanoCadIO
 			var doc = AcApp.DocumentManager.MdiActiveDocument;
 			if (doc == null) return;
 
-			// Берем текущее выделение
 			var selection = doc.Editor.SelectImplied();
 			if (selection.Status != PromptStatus.OK || selection.Value == null || selection.Value.Count == 0)
 			{
-				Log(doc, "Нет выделенных объектов для экспорта. Выделите блоки в чертеже.");
+				SetStatus("Нет выделенных объектов. Выделите блоки в чертеже.", isError: true);
 				return;
 			}
 
-			// Берем галочки из отфильтрованного списка
-			var selectedBlocks = BlockItems.Where(b => b.IsSelected).Select(b => b.BlockName).ToHashSet();
-			if (selectedBlocks.Count == 0)
+			var selectedTypes = BlockItems
+				.Where(b => b.IsSelected)
+				.Select(b => b.BlockName)
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+			if (selectedTypes.Count == 0)
 			{
-				Log(doc, "Не выбрано ни одного типа блока для экспорта.");
+				SetStatus("Не отмечено ни одного типа блока для экспорта.", isError: true);
+				return;
+			}
+
+			// Извлекаем ДО диалога сохранения
+			List<BlockData> blocks;
+			try
+			{
+				blocks = BlockDataExtractor.Extract(doc, selection.Value.GetObjectIds(), selectedTypes);
+			}
+			catch (Exception ex)
+			{
+				SetStatus($"Ошибка извлечения данных: {ex.Message}", isError: true);
+				return;
+			}
+
+			if (blocks.Count == 0)
+			{
+				SetStatus("Среди выделенных объектов нет блоков отмеченных типов.", isError: true);
 				return;
 			}
 
@@ -196,28 +311,38 @@ namespace NanoCadIO
 			{
 				Filter = "Excel Files (*.xlsx)|*.xlsx",
 				DefaultExt = "xlsx",
-				FileName = "blocks_export.xlsx"
+				FileName = BuildDefaultExportFileName(doc)
 			};
 
 			if (saveDialog.ShowDialog() != true) return;
 
 			try
 			{
-				// Передаем только те ObjectId, которые сейчас выделены
-				var blocks = BlockDataExtractor.Extract(doc, selection.Value.GetObjectIds(), selectedBlocks);
-				if (blocks.Count == 0)
-				{
-					Log(doc, "Не найдено ни одного вхождения выбранных блоков в текущем выделении.");
-					return;
-				}
-
 				ExcelExporter.Export(blocks, saveDialog.FileName);
-				Log(doc, $"Успешно экспортировано {blocks.Count} вхождений в {saveDialog.FileName}");
+				SetStatus(
+					$"Экспортировано {blocks.Count} вхождений в {Path.GetFileName(saveDialog.FileName)}.",
+					isError: false);
 			}
 			catch (Exception ex)
 			{
-				Log(doc, $"Ошибка экспорта: {ex.Message}");
+				SetStatus($"Ошибка экспорта: {ex.Message}", isError: true);
 			}
+		}
+
+		private static string BuildDefaultExportFileName(Document doc)
+		{
+			string baseName;
+			try
+			{
+				baseName = string.IsNullOrWhiteSpace(doc.Name)
+					? "blocks"
+					: Path.GetFileNameWithoutExtension(doc.Name);
+			}
+			catch
+			{
+				baseName = "blocks";
+			}
+			return $"{baseName}_blocks_{DateTime.Now:yyyyMMdd}.xlsx";
 		}
 
 		private void ImportBtn_Click(object sender, RoutedEventArgs e)
@@ -233,21 +358,75 @@ namespace NanoCadIO
 
 			if (openDialog.ShowDialog() != true) return;
 
+			// Предпросмотр содержимого файла до применения
+			(int rows, int attrCols, int dynCols) preview;
 			try
 			{
-				int updated = ExcelImporter.Import(doc, openDialog.FileName);
-				Log(doc, $"Импорт завершён. Обновлено блоков: {updated}");
+				preview = ExcelImporter.Preview(openDialog.FileName);
+			}
+			catch (Exception ex)
+			{
+				SetStatus($"Не удалось прочитать файл: {ex.Message}", isError: true);
+				return;
+			}
+
+			// Используем System.Windows.MessageBox из-за конфликта с WinForms
+			var confirm = System.Windows.MessageBox.Show(
+				$"Файл: {Path.GetFileName(openDialog.FileName)}\n" +
+				$"Строк данных: {preview.rows}\n" +
+				$"Столбцов атрибутов: {preview.attrCols}\n" +
+				$"Столбцов динамических свойств: {preview.dynCols}\n\n" +
+				"Применить значения к блокам в чертеже?\n" +
+				"Изменения можно отменить командой UNDO.",
+				"Импорт из Excel",
+				MessageBoxButton.OKCancel,
+				MessageBoxImage.Question);
+
+			if (confirm != MessageBoxResult.OK) return;
+
+			try
+			{
+				ImportResult result = ExcelImporter.Import(doc, openDialog.FileName);
+				SetStatus(FormatImportResult(result),
+					isError: result.ErrorCount > 0 || result.NotFoundCount > 0);
 				SyncSelectionFromDrawing();
 			}
 			catch (Exception ex)
 			{
-				Log(doc, $"Ошибка импорта: {ex.Message}");
+				SetStatus($"Ошибка импорта: {ex.Message}", isError: true);
 			}
 		}
 
-		private static void Log(Document? doc, string message)
+		private static string FormatImportResult(ImportResult r)
 		{
-			doc?.Editor?.WriteMessage($"\n[Blocks IO] {message}");
+			var summary = $"Импорт: обновлено {r.UpdatedCount}";
+			if (r.NotFoundCount > 0) summary += $", не найдено {r.NotFoundCount}";
+			if (r.ErrorCount > 0) summary += $", ошибок {r.ErrorCount}";
+			summary += $" (всего строк: {r.TotalRowsProcessed}).";
+
+			if (r.Errors.Count > 0)
+			{
+				summary += " " + string.Join(" | ", r.Errors.Take(3));
+				if (r.Errors.Count > 3)
+					summary += $" … (+{r.Errors.Count - 3})";
+			}
+			return summary;
+		}
+
+		private void SetStatus(string message, bool isError)
+		{
+			StatusLabel.Text = message;
+			if (isError)
+				StatusLabel.Foreground = System.Windows.Media.Brushes.Firebrick; // Исправлено: явное указание пространства имен
+			else
+				StatusLabel.ClearValue(TextBlock.ForegroundProperty);
+
+			// Дублируем ошибки в командную строку как вторичный канал.
+			if (isError)
+			{
+				var doc = AcApp.DocumentManager.MdiActiveDocument;
+				doc?.Editor?.WriteMessage($"\n[Blocks IO] {message}");
+			}
 		}
 	}
 }
