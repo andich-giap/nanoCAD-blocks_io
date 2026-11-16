@@ -8,7 +8,7 @@
              d:DesignHeight="500" d:DesignWidth="350">
     <Grid Margin="8">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- поиск + все/ничего -->
+            <RowDefinition Height="Auto"/> <!-- поиск + массовые действия -->
             <RowDefinition Height="*"/>    <!-- список -->
             <RowDefinition Height="Auto"/> <!-- счётчики -->
             <RowDefinition Height="Auto"/> <!-- статус -->
@@ -21,6 +21,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBox x:Name="SearchBox"
                      Grid.Column="0"
@@ -29,16 +30,22 @@
                      VerticalContentAlignment="Center"
                      ToolTip="Поиск по имени блока"
                      TextChanged="SearchBox_TextChanged"/>
-            <Button x:Name="SelectAllBtn"
+            <Button x:Name="InvertBtn"
                     Grid.Column="1"
+                    Content="Инверсия"
+                    MinWidth="64" Height="24" Margin="0,0,4,0"
+                    ToolTip="Инвертировать отметки у видимых блоков"
+                    Click="InvertBtn_Click"/>
+            <Button x:Name="SelectAllBtn"
+                    Grid.Column="2"
                     Content="Все"
-                    MinWidth="52" Height="24" Margin="0,0,4,0"
+                    MinWidth="48" Height="24" Margin="0,0,4,0"
                     ToolTip="Отметить все видимые блоки"
                     Click="SelectAllBtn_Click"/>
             <Button x:Name="ClearAllBtn"
-                    Grid.Column="2"
+                    Grid.Column="3"
                     Content="Ничего"
-                    MinWidth="52" Height="24"
+                    MinWidth="48" Height="24"
                     ToolTip="Снять отметки со всех видимых блоков"
                     Click="ClearAllBtn_Click"/>
         </Grid>

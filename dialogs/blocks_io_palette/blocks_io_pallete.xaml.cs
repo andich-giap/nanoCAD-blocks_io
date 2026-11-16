@@ -247,6 +247,15 @@ namespace NanoCadIO
 			_blockItemsView.Refresh();
 		}
 
+		private void InvertBtn_Click(object sender, RoutedEventArgs e)
+		{
+			// Инвертируем только то, что сейчас видно (с учетом поиска)
+			foreach (var item in _blockItemsView.Cast<BlockSelectionItem>())
+			{
+				item.IsSelected = !item.IsSelected;
+			}
+		}
+
 		private void SelectAllBtn_Click(object sender, RoutedEventArgs e)
 		{
 			foreach (var item in _blockItemsView.Cast<BlockSelectionItem>())
@@ -417,7 +426,7 @@ namespace NanoCadIO
 		{
 			StatusLabel.Text = message;
 			if (isError)
-				StatusLabel.Foreground = System.Windows.Media.Brushes.Firebrick; // Исправлено: явное указание пространства имен
+				StatusLabel.Foreground = System.Windows.Media.Brushes.Firebrick; // Явно указываем WPF Brushes
 			else
 				StatusLabel.ClearValue(TextBlock.ForegroundProperty);
 
