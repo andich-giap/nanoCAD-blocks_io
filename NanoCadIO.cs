@@ -1,10 +1,11 @@
 using System;
 using System.Windows;
-using Teigha.Runtime;
+using System.Reflection;
 using Teigha.DatabaseServices;
 using HostMgd.ApplicationServices;
-using HostMgd.Windows;
 using HostMgd.EditorInput;
+using Teigha.Runtime;
+using HostMgd.Windows;
 using System.Windows.Forms.Integration;
 using System.Windows.Forms;
 
@@ -162,7 +163,8 @@ namespace NanoCadIo
 			}
 		}
 	}
-	public class PaletteCommands {
+	public class PaletteCommands
+	{
 		private static PaletteSet? _paletteSet;
 
 		[CommandMethod("IO_SHOW_BLOCKS_IO_PALETTE")]
@@ -171,7 +173,7 @@ namespace NanoCadIo
 			if (_paletteSet == null)
 			{
 				_paletteSet = new PaletteSet("Блоки в Excel");
-				
+
 				var ioControl = new BlocksIoPalette();
 
 				var elementHost = new ElementHost
@@ -182,7 +184,7 @@ namespace NanoCadIo
 
 				// Используем .Add вместо .AddVisual, так как elementHost - это WinForms контрол
 				_paletteSet.Add("Экспорт/Импорт", elementHost);
-				
+
 				_paletteSet.Size = new System.Drawing.Size(350, 500);
 				_paletteSet.MinimumSize = new System.Drawing.Size(350, 500);
 				_paletteSet.Dock = DockSides.None;
